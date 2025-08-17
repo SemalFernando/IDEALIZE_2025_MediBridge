@@ -215,7 +215,7 @@ function Login() {
           </div>
 
           <div className="auth-footer">
-            Not a donor yet? <Link to="/registration" className="auth-link">Join our life-saving community</Link>
+            Not a donor yet? <Link to="/donor-registration" className="auth-link">Join our life-saving community</Link>
           </div>
         </div>
       </div>
