@@ -3,17 +3,14 @@ import { Link, useNavigate } from 'react-router-dom';
 import styles from '../styles/NGODashboard.module.css';
 import NGOProfile from '../components/NGOProfile';
 
-const API_BASE = 'http://localhost:8080';
+const API_BASE = 'http://localhost:8081';
 
 function NGODashboard({ donations, onAddCampaign }) {
   const navigate = useNavigate();
   const [hospitals, setHospitals] = useState([]);
-  const [notifications, setNotifications] = useState([
-    { id: 1, message: 'New donation of Rs. 5,000 from Rohan Sharma', time: '2 mins ago', read: false },
-    { id: 2, message: 'Monthly report is ready for review', time: '1 hour ago', read: true },
-    { id: 3, message: 'Campaign "Education for All" reached 80% of goal', time: '3 hours ago', read: true }
-  ]);
+  const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Mock user data
   const user = {
@@ -22,15 +19,67 @@ function NGODashboard({ donations, onAddCampaign }) {
     avatar: null
   };
 
+  // Fetch notifications from backend
+  const fetchNotifications = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/notifications`);
+      const data = await res.json();
+      setNotifications(data.map(notification => ({
+        id: notification.id,
+        message: notification.message,
+        type: notification.type,
+        time: formatTime(notification.createdAt),
+        read: notification.isRead
+      })));
+    } catch (error) {
+      console.error('Failed to fetch notifications', error);
+    }
+  };
+
+  // Fetch unread count
+  const fetchUnreadCount = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/notifications/unread-count`);
+      const count = await res.json();
+      setUnreadCount(count);
+    } catch (error) {
+      console.error('Failed to fetch unread count', error);
+    }
+  };
+
+  // Time formatter
+  const formatTime = (timestamp) => {
+    const now = new Date();
+    const created = new Date(timestamp);
+    const diffHours = Math.floor((now - created) / (1000 * 60 * 60));
+
+    if (diffHours < 1) return 'Just now';
+    if (diffHours < 24) return `${diffHours} hours ago`;
+    return created.toLocaleDateString();
+  };
+
+  // Mark notification as read
+  const markAsRead = async (id) => {
+    try {
+      await fetch(`${API_BASE}/api/notifications/${id}/read`, {
+        method: 'PATCH'
+      });
+      // Update local state
+      setNotifications(notifications.map(n =>
+        n.id === id ? { ...n, read: true } : n
+      ));
+      setUnreadCount(prev => prev > 0 ? prev - 1 : 0);
+    } catch (error) {
+      console.error('Failed to mark notification as read', error);
+    }
+  };
+
   // Load hospitals from backend
   const loadHospitals = async () => {
     try {
       const res = await fetch(`${API_BASE}/api/hospitals`);
       const data = await res.json();
-      const sortedHospitals = Array.isArray(data)
-        ? data.sort((a, b) => b.id - a.id)
-        : [];
-      setHospitals(sortedHospitals);
+      setHospitals(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error('Failed to fetch hospitals:', e);
     }
@@ -38,25 +87,40 @@ function NGODashboard({ donations, onAddCampaign }) {
 
   useEffect(() => {
     loadHospitals();
+    fetchNotifications();
+    fetchUnreadCount();
+
+    // Set up polling for new notifications
+    const interval = setInterval(() => {
+      fetchNotifications();
+      fetchUnreadCount();
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleViewDonationDetails = (donation) => {
     navigate('/donation-details', { state: { donation } });
   };
 
-  const summary = {
-    totalFunds: 125000,
-    hospitals: hospitals.length, // Now using actual count from state
-    activeCampaigns: 3,
-    urgentNeeds: 2
-  };
-
   const toggleNotifications = () => {
     setShowNotifications(!showNotifications);
+
     // Mark all as read when opening
     if (!showNotifications) {
-      setNotifications(notifications.map(n => ({ ...n, read: true })));
+      notifications.forEach(notification => {
+        if (!notification.read) {
+          markAsRead(notification.id);
+        }
+      });
     }
+  };
+
+  const summary = {
+    totalFunds: 125000,
+    hospitals: hospitals.length,
+    activeCampaigns: 3,
+    urgentNeeds: 2
   };
 
   return (

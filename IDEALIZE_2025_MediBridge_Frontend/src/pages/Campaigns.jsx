@@ -50,17 +50,13 @@ function Campaigns() {
   const [campaignTitle, setCampaignTitle] = useState('');
   const [campaignDescription, setCampaignDescription] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [goalAmount, setGoalAmount] = useState('');
   const [message, setMessage] = useState('');
   const [showCreateCampaign, setShowCreateCampaign] = useState(false);
   const [campaigns, setCampaigns] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [campaignType, setCampaignType] = useState('BLOOD'); // Set to valid initial type
+  const [campaignType, setCampaignType] = useState('BLOOD');
   const [typeSpecificFields, setTypeSpecificFields] = useState({});
-  const [notifications, setNotifications] = useState([
-    { id: 1, message: 'Campaign "Medical Equipment" reached 65% of goal', time: '30 mins ago', read: false },
-    { id: 2, message: 'New donation of Rs. 10,000 for Children Education', time: '2 hours ago', read: true }
-  ]);
-  const [showNotifications, setShowNotifications] = useState(false);
 
   const user = {
     name: 'NGO Admin',
@@ -76,11 +72,22 @@ function Campaigns() {
     setIsLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/campaigns`);
-      const data = await res.json();
+
+      if (res.status === 204) { // No content
+        setCampaigns([]);
+        return;
+      }
+      const responseBody = await res.text();
+
+      if (!res.ok) {
+        throw new Error(responseBody || 'Failed to load campaigns');
+      }
+
+      const data = JSON.parse(responseBody);
       setCampaigns(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error('Failed to fetch campaigns:', e);
-      setMessage('Failed to load campaigns');
+      setMessage(e.message || 'Failed to load campaigns');
     } finally {
       setIsLoading(false);
     }
@@ -121,18 +128,25 @@ function Campaigns() {
 
       const response = await fetch(`${API_BASE}/api/campaigns`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(campaignData)
       });
 
+      // Fixed response handling - read only once
+      const responseBody = await response.text();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create campaign');
+        let errorMessage = 'Failed to create campaign';
+        try {
+          const errorData = JSON.parse(responseBody);
+          errorMessage = errorData.error || errorMessage;
+        } catch (jsonError) {
+          errorMessage = responseBody || errorMessage;
+        }
+        throw new Error(errorMessage);
       }
 
-      const newCampaign = await response.json();
+      const newCampaign = JSON.parse(responseBody);
       setCampaigns(prev => [newCampaign, ...prev]);
       setMessage('Campaign created successfully!');
 
@@ -140,6 +154,7 @@ function Campaigns() {
       setCampaignTitle('');
       setCampaignDescription('');
       setEndDate('');
+      setGoalAmount('');
       setTypeSpecificFields({});
       setShowCreateCampaign(false);
     } catch (error) {
@@ -147,13 +162,6 @@ function Campaigns() {
       setMessage(error.message || 'Error creating campaign');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const toggleNotifications = () => {
-    setShowNotifications(!showNotifications);
-    if (!showNotifications) {
-      setNotifications(notifications.map(n => ({ ...n, read: true })));
     }
   };
 
@@ -216,43 +224,6 @@ function Campaigns() {
             <p className={styles.pageSubtitle}>Create and manage your fundraising campaigns</p>
           </div>
           <div className={styles.headerActions}>
-            <div className={styles.notificationWrapper}>
-              <button
-                className={styles.notificationBtn}
-                onClick={toggleNotifications}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className={styles.notificationIcon} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-                {notifications.some(n => !n.read) && (
-                  <span className={styles.notificationBadge}></span>
-                )}
-              </button>
-              {showNotifications && (
-                <div className={styles.notificationDropdown}>
-                  <div className={styles.notificationHeader}>
-                    <h3>Notifications</h3>
-                  </div>
-                  <div className={styles.notificationList}>
-                    {notifications.length > 0 ? (
-                      notifications.map(notification => (
-                        <div
-                          key={notification.id}
-                          className={`${styles.notificationItem} ${!notification.read ? styles.unread : ''}`}
-                        >
-                          <p>{notification.message}</p>
-                          <span className={styles.notificationTime}>{notification.time}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <div className={styles.noNotifications}>
-                        No new notifications
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
 
             <button
               className={styles.addButton}

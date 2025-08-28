@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Chatbot from '../components/Chatbot';
 import '../styles/DonorDashboard.Module.css';
@@ -6,17 +6,54 @@ import '../styles/DonorDashboard.Module.css';
 function DonorDashboard({ hospitals, onSelectHospital }) {
   const navigate = useNavigate();
 
+  const [notifications, setNotifications] = useState([]);
+const [showNotifications, setShowNotifications] = useState(false);
+
+// Fetch notifications
+const fetchNotifications = async () => {
+  try {
+    const res = await fetch('http://localhost:8082/api/campaigns/notifications');
+    const data = await res.json();
+setNotifications(data.map(notification => ({
+  id: notification.id,
+  message: notification.description, 
+  time: formatTime(notification.createdAt), 
+  read: false
+})));
+  } catch (error) {
+    console.error('Failed to fetch notifications', error);
+  }
+};
+
+// Time formatter
+const formatTime = (timestamp) => {
+  const now = new Date();
+  const created = new Date(timestamp);
+  const diffHours = Math.floor((now - created) / (1000 * 60 * 60));
+  
+  if (diffHours < 1) return 'Just now';
+  if (diffHours < 24) return `${diffHours} hours ago`;
+  return created.toLocaleDateString();
+};
+
+// Call in useEffect
+useEffect(() => {
+  fetchNotifications();
+  const interval = setInterval(fetchNotifications, 60000); 
+  return () => clearInterval(interval);
+}, []);
+
   const handleSelectHospital = (hospital) => {
     window.scrollTo(0, 0);
 
-    // Call the prop function if it exists (for App.jsx state management)
+    
     if (onSelectHospital) {
       onSelectHospital(hospital);
     }
-    // Replace the current entry instead of pushing a new one
+    
     navigate('/hospital', { 
       state: { hospital },
-      replace: true  // This is the key change
+      replace: true 
     });
   };
 
