@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import styles from '../styles/NGODashboard.module.css';
 import NGOProfile from '../components/NGOProfile';
@@ -10,7 +10,12 @@ function NGODashboard({ donations, onAddCampaign }) {
   const [hospitals, setHospitals] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  
+  // State for counts
+  const [hospitalsCount, setHospitalsCount] = useState(0);
+  const [urgentNeedsCount, setUrgentNeedsCount] = useState(0);
+  const [campaignsCount, setCampaignsCount] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   // Mock user data
   const user = {
@@ -19,8 +24,8 @@ function NGODashboard({ donations, onAddCampaign }) {
     avatar: null
   };
 
-  // Fetch notifications from backend
-  const fetchNotifications = async () => {
+  // Fetch notifications from backend with useCallback
+  const fetchNotifications = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/api/notifications`);
       const data = await res.json();
@@ -34,18 +39,7 @@ function NGODashboard({ donations, onAddCampaign }) {
     } catch (error) {
       console.error('Failed to fetch notifications', error);
     }
-  };
-
-  // Fetch unread count
-  const fetchUnreadCount = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/notifications/unread-count`);
-      const count = await res.json();
-      setUnreadCount(count);
-    } catch (error) {
-      console.error('Failed to fetch unread count', error);
-    }
-  };
+  }, []);
 
   // Time formatter
   const formatTime = (timestamp) => {
@@ -68,36 +62,56 @@ function NGODashboard({ donations, onAddCampaign }) {
       setNotifications(notifications.map(n =>
         n.id === id ? { ...n, read: true } : n
       ));
-      setUnreadCount(prev => prev > 0 ? prev - 1 : 0);
     } catch (error) {
       console.error('Failed to mark notification as read', error);
     }
   };
 
-  // Load hospitals from backend
-  const loadHospitals = async () => {
+  // Fetch counts from backend
+  const fetchCounts = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/hospitals`);
-      const data = await res.json();
-      setHospitals(Array.isArray(data) ? data : []);
-    } catch (e) {
-      console.error('Failed to fetch hospitals:', e);
+      setLoading(true);
+      
+      // Fetch hospitals count
+      const hospitalsRes = await fetch(`${API_BASE}/api/hospitals`);
+      if (hospitalsRes.ok) {
+        const hospitalsData = await hospitalsRes.json();
+        setHospitalsCount(Array.isArray(hospitalsData) ? hospitalsData.length : 0);
+        setHospitals(Array.isArray(hospitalsData) ? hospitalsData : []);
+      }
+      
+      // Fetch urgent needs count
+      const urgentNeedsRes = await fetch(`${API_BASE}/api/urgent-needs`);
+      if (urgentNeedsRes.ok) {
+        const urgentNeedsData = await urgentNeedsRes.json();
+        setUrgentNeedsCount(Array.isArray(urgentNeedsData) ? urgentNeedsData.length : 0);
+      }
+      
+      // Fetch campaigns count
+      const campaignsRes = await fetch(`${API_BASE}/api/campaigns`);
+      if (campaignsRes.ok) {
+        const campaignsData = await campaignsRes.json();
+        setCampaignsCount(Array.isArray(campaignsData) ? campaignsData.length : 0);
+      }
+    } catch (error) {
+      console.error('Failed to fetch counts:', error);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadHospitals();
+    fetchCounts();
     fetchNotifications();
-    fetchUnreadCount();
 
-    // Set up polling for new notifications
+    // Set up polling for new data
     const interval = setInterval(() => {
+      fetchCounts();
       fetchNotifications();
-      fetchUnreadCount();
-    }, 5000);
+    }, 30000); // Refresh every 30 seconds
 
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchCounts, fetchNotifications]);
 
   const handleViewDonationDetails = (donation) => {
     navigate('/donation-details', { state: { donation } });
@@ -118,9 +132,9 @@ function NGODashboard({ donations, onAddCampaign }) {
 
   const summary = {
     totalFunds: 125000,
-    hospitals: hospitals.length,
-    activeCampaigns: 3,
-    urgentNeeds: 2
+    hospitals: hospitalsCount,
+    activeCampaigns: campaignsCount,
+    urgentNeeds: urgentNeedsCount
   };
 
   return (
@@ -239,7 +253,7 @@ function NGODashboard({ donations, onAddCampaign }) {
                 </svg>
               </div>
               <h3 className={styles.cardTitle}>Hospitals</h3>
-              <p className={styles.cardValue}>{summary.hospitals}</p>
+              <p className={styles.cardValue}>{loading ? '...' : summary.hospitals}</p>
               <Link
                 to="/hospitals"
                 className={`${styles.btn} ${styles.btnSecondary} ${styles.mt2}`}
@@ -257,7 +271,7 @@ function NGODashboard({ donations, onAddCampaign }) {
                 </svg>
               </div>
               <h3 className={styles.cardTitle}>Urgent Needs</h3>
-              <p className={styles.cardValue}>{summary.urgentNeeds}</p>
+              <p className={styles.cardValue}>{loading ? '...' : summary.urgentNeeds}</p>
               <Link
                 to="/urgent-needs"
                 className={`${styles.btn} ${styles.btnSecondary} ${styles.mt2}`}
@@ -275,7 +289,7 @@ function NGODashboard({ donations, onAddCampaign }) {
                 </svg>
               </div>
               <h3 className={styles.cardTitle}>Active Campaigns</h3>
-              <p className={styles.cardValue}>{summary.activeCampaigns}</p>
+              <p className={styles.cardValue}>{loading ? '...' : summary.activeCampaigns}</p>
               <Link
                 to="/campaigns"
                 className={`${styles.btn} ${styles.btnSecondary} ${styles.mt2}`}

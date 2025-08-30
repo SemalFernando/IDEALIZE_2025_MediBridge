@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom';
 import styles from '../styles/Campaigns.module.css';
 import NGOProfile from '../components/NGOProfile';
 
-const API_BASE = 'http://localhost:8080';
+const API_BASE = 'http://localhost:8082'; // Ensure this matches your backend port
 
-// Campaign type configurations (only Blood Donation and Medical Supplies)
+// Campaign type configurations
 const CAMPAIGN_TYPES = {
   BLOOD: {
     label: 'Blood Donation',
@@ -58,6 +58,7 @@ function Campaigns() {
   const [campaignType, setCampaignType] = useState('BLOOD');
   const [typeSpecificFields, setTypeSpecificFields] = useState({});
 
+
   const user = {
     name: 'NGO Admin',
     email: 'admin@example.org',
@@ -68,30 +69,30 @@ function Campaigns() {
     loadCampaigns();
   }, []);
 
-  const loadCampaigns = async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/campaigns`);
-
-      if (res.status === 204) { // No content
-        setCampaigns([]);
-        return;
-      }
-      const responseBody = await res.text();
-
-      if (!res.ok) {
-        throw new Error(responseBody || 'Failed to load campaigns');
-      }
-
-      const data = JSON.parse(responseBody);
-      setCampaigns(Array.isArray(data) ? data : []);
-    } catch (e) {
-      console.error('Failed to fetch campaigns:', e);
-      setMessage(e.message || 'Failed to load campaigns');
-    } finally {
-      setIsLoading(false);
+const loadCampaigns = async () => {
+  setIsLoading(true);
+  try {
+    const res = await fetch(`${API_BASE}/api/campaigns`);
+    
+    if (res.status === 204) { // No content
+      setCampaigns([]);
+      return;
     }
-  };
+    const responseBody = await res.text();
+    
+    if (!res.ok) {
+      throw new Error(responseBody || 'Failed to load campaigns');
+    }
+    
+    const data = JSON.parse(responseBody);
+    setCampaigns(Array.isArray(data) ? data : []);
+  } catch (e) {
+    console.error('Failed to fetch campaigns:', e);
+    setMessage(e.message || 'Failed to load campaigns');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleTypeSpecificChange = (fieldName, value) => {
     setTypeSpecificFields(prev => ({
@@ -100,73 +101,73 @@ function Campaigns() {
     }));
   };
 
-  const handleAddCampaign = async () => {
-    setMessage('');
-    if (!campaignTitle || !campaignDescription || !endDate) {
-      setMessage('Please fill all required fields');
+const handleAddCampaign = async () => {
+  setMessage('');
+  if (!campaignTitle || !campaignDescription || !endDate || !goalAmount) {
+    setMessage('Please fill all required fields');
+    return;
+  }
+
+  const currentTypeConfig = CAMPAIGN_TYPES[campaignType];
+  for (const field of currentTypeConfig.fields) {
+    if (field.required && !typeSpecificFields[field.name]) {
+      setMessage(`Please fill ${field.label}`);
       return;
     }
+  }
 
-    const currentTypeConfig = CAMPAIGN_TYPES[campaignType];
-    for (const field of currentTypeConfig.fields) {
-      if (field.required && !typeSpecificFields[field.name]) {
-        setMessage(`Please fill ${field.label}`);
-        return;
+  setIsLoading(true);
+  try {
+    const campaignData = {
+      title: campaignTitle,
+      description: campaignDescription,
+      endDate,
+      goal: parseFloat(goalAmount),
+      type: campaignType,
+      typeData: typeSpecificFields
+    };
+
+    const response = await fetch(`${API_BASE}/api/campaigns`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(campaignData)
+    });
+
+    // Fixed response handling - read only once
+    const responseBody = await response.text();
+    
+    if (!response.ok) {
+      let errorMessage = 'Failed to create campaign';
+      try {
+        const errorData = JSON.parse(responseBody);
+        errorMessage = errorData.error || errorMessage;
+      } catch (jsonError) {
+        errorMessage = responseBody || errorMessage;
       }
+      throw new Error(errorMessage);
     }
 
-    setIsLoading(true);
-    try {
-      const campaignData = {
-        title: campaignTitle,
-        description: campaignDescription,
-        endDate,
-        type: campaignType,
-        typeData: typeSpecificFields,
-        status: "active"
-      };
+    const newCampaign = JSON.parse(responseBody);
+    setCampaigns(prev => [newCampaign, ...prev]);
+    setMessage('Campaign created successfully!');
 
-      const response = await fetch(`${API_BASE}/api/campaigns`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(campaignData)
-      });
-
-      // Fixed response handling - read only once
-      const responseBody = await response.text();
-
-      if (!response.ok) {
-        let errorMessage = 'Failed to create campaign';
-        try {
-          const errorData = JSON.parse(responseBody);
-          errorMessage = errorData.error || errorMessage;
-        } catch (jsonError) {
-          errorMessage = responseBody || errorMessage;
-        }
-        throw new Error(errorMessage);
-      }
-
-      const newCampaign = JSON.parse(responseBody);
-      setCampaigns(prev => [newCampaign, ...prev]);
-      setMessage('Campaign created successfully!');
-
-      // Reset form
-      setCampaignTitle('');
-      setCampaignDescription('');
-      setEndDate('');
-      setGoalAmount('');
-      setTypeSpecificFields({});
-      setShowCreateCampaign(false);
-    } catch (error) {
-      console.error('Error creating campaign:', error);
-      setMessage(error.message || 'Error creating campaign');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    // Reset form
+    setCampaignTitle('');
+    setCampaignDescription('');
+    setEndDate('');
+    setGoalAmount('');
+    setTypeSpecificFields({});
+    setShowCreateCampaign(false);
+  } catch (error) {
+    console.error('Error creating campaign:', error);
+    setMessage(error.message || 'Error creating campaign');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const calculateProgress = (raised, goal) => {
-    return Math.min(100, (raised / goal) * 100);
+    return goal > 0 ? Math.min(100, (raised / goal) * 100) : 0;
   };
 
   return (
@@ -252,7 +253,7 @@ function Campaigns() {
             ) : campaigns.length > 0 ? (
               <div className={styles.campaignsList}>
                 {campaigns.map(campaign => (
-                  <div key={campaign._id || campaign.id} className={styles.campaignItem}>
+                  <div key={campaign.id} className={styles.campaignItem}>
                     <div className={styles.campaignInfo}>
                       <h3>{campaign.title}</h3>
                       <p>{campaign.description}</p>
@@ -273,7 +274,7 @@ function Campaigns() {
                       </div>
                       <div className={styles.campaignMeta}>
                         <span>Ends: {new Date(campaign.endDate).toLocaleDateString()}</span>
-                        <span className={`${styles.statusBadge} ${campaign.status || 'active'}`}>
+                        <span className={`${styles.statusBadge} ${campaign.status?.toLowerCase() || 'active'}`}>
                           {campaign.status || 'Active'}
                         </span>
                       </div>
@@ -337,20 +338,20 @@ function Campaigns() {
                 </div>
 
                 <div className={styles.formRow}>
-                  <div className={styles.formGroup} style={{ flex: 2 }}>
-                    <label>Type*</label>
-                    <select
-                      value={campaignType}
-                      onChange={(e) => setCampaignType(e.target.value)}
-                      className={styles.typeDropdown}
-                    >
-                      <option value="BLOOD">🩸 Blood Donation</option>
-                      <option value="SUPPLIES">🏥 Medical Supplies</option>
-                    </select>
-                  </div>
-
                   <div className={styles.formGroup} style={{ flex: 1 }}>
-                    <label>Date*</label>
+                    <label>Goal Amount (Rs)*</label>
+                    <input
+                      type="number"
+                      placeholder="Amount needed"
+                      value={goalAmount}
+                      onChange={(e) => setGoalAmount(e.target.value)}
+                      min="1"
+                      required
+                    />
+                  </div>
+                  
+                  <div className={styles.formGroup} style={{ flex: 1 }}>
+                    <label>End Date*</label>
                     <input
                       type="date"
                       value={endDate}
@@ -358,6 +359,18 @@ function Campaigns() {
                       required
                     />
                   </div>
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label>Type*</label>
+                  <select
+                    value={campaignType}
+                    onChange={(e) => setCampaignType(e.target.value)}
+                    className={styles.typeDropdown}
+                  >
+                    <option value="BLOOD">🩸 Blood Donation</option>
+                    <option value="SUPPLIES">🏥 Medical Supplies</option>
+                  </select>
                 </div>
 
                 {/* Dynamic Fields */}
@@ -379,14 +392,6 @@ function Campaigns() {
                             <option key={option} value={option}>{option}</option>
                           ))}
                         </select>
-                      ) : field.type === 'textarea' ? (
-                        <textarea
-                          placeholder={`Enter ${field.label}`}
-                          value={typeSpecificFields[field.name] || ''}
-                          onChange={(e) => handleTypeSpecificChange(field.name, e.target.value)}
-                          required={field.required}
-                          rows={2}
-                        />
                       ) : (
                         <input
                           type={field.type}

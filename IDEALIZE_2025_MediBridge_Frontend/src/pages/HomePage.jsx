@@ -257,20 +257,30 @@ function HomePage() {
         {/* Featured Hospitals Section */}
         <div id="hospitals" className="featured-hospitals">
           <h2>Featured Hospitals in Need</h2>
-          <div className="hospitals-grid">
-            {hospitals.length > 0 ? (
-              hospitals.map((hospital) => (
-                <div className="hospital-card" key={hospital.id}>
-                  <img src={imageOrPlaceholder(hospital.imageUrl)} alt={hospital.name} className="hospital-image" />
-                  <h3>{hospital.name}</h3>
-                  <p>{hospital.location}</p>
-                  <p><strong>Contact:</strong> {hospital.contactNumber}</p>
-                  <button className="cta-button">Donate Now</button>
-                </div>
-              ))
-            ) : (
-              <p>No hospitals available.</p>
-            )}
+          <div className="hospitals-cards-wrapper">
+            <div className="hospitals-cards-scroll">
+              {hospitals.length > 0 ? (
+                hospitals.map((hospital) => (
+                  <div className="hospital-card" key={hospital.id}>
+                    <div className="hospital-image-container">
+                      <img
+                        src={imageOrPlaceholder(hospital.imageUrl)}
+                        alt={hospital.name}
+                        className="hospital-image"
+                      />
+                    </div>
+                    <div className="hospital-content">
+                      <h3>{hospital.name}</h3>
+                      <p className="hospital-location">{hospital.location}</p>
+                      <p className="hospital-contact"><strong>Contact:</strong> {hospital.contactNumber}</p>
+                      <button className="cta-button">Donate Now</button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p>No hospitals available.</p>
+              )}
+            </div>
           </div>
         </div>
 
